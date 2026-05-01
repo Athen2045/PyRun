@@ -1,159 +1,407 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@500;700;800&display=swap');
 
-* {
-    padding: 0;
+*, *::before, *::after {
     margin: 0;
+    padding: 0;
     box-sizing: border-box;
 }
 
+:root {
+    --bg:         #0e0e12;
+    --surface:    #16161d;
+    --surface2:   #1e1e28;
+    --border:     rgba(255,255,255,0.07);
+    --border-hi:  rgba(255,255,255,0.13);
+    --text:       #e2e2e8;
+    --muted:      #6e6e80;
+    --accent:     #7c6af5;
+    --accent-glow:rgba(124,106,245,0.18);
+    --green:      #3ddc84;
+    --red:        #ff6b6b;
+    --yellow:     #f7c948;
+    --font-ui:    'Syne', system-ui, sans-serif;
+    --font-mono:  'JetBrains Mono', 'Fira Code', monospace;
+    --radius:     10px;
+    --radius-sm:  6px;
+}
+
+html, body {
+    height: 100%;
+}
+
 body {
-    font-family: 'Inter', sans-serif; /* GitHub-like modern font */
-    background-color: #24292f;  /* GitHub dark theme background */
-    color: #e1e4e8;  /* Light grey text color */
+    font-family: var(--font-ui);
+    background: var(--bg);
+    color: var(--text);
     display: flex;
-    justify-content: center;
-    align-items: center;
+    flex-direction: column;
     min-height: 100vh;
-    padding: 40px;
+    overflow-x: hidden;
 }
 
-.container {
-    width: 100%;
-    max-width: 900px;
-    background: #2d333b; /* Slightly lighter dark background */
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); /* Subtle shadow */
-    overflow: hidden;
+/* ─── Header ─── */
+.site-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
-h1 {
-    font-size: 28px;
-    font-weight: 600;
-    text-align: center;
-    margin-bottom: 25px;
-    color: #ffffff; /* White color for the title */
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
 }
 
+.brand-icon {
+    font-size: 18px;
+    color: var(--accent);
+    line-height: 1;
+}
+
+.brand-name {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #fff;
+}
+
+.header-meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+}
+
+/* ─── Layout ─── */
+.layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    flex: 1;
+    min-height: 0;
+}
+
+@media (max-width: 768px) {
+    .layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ─── Panels ─── */
+.editor-panel,
+.output-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 53px);
+    background: var(--surface);
+}
+
+.editor-panel {
+    border-right: 1px solid var(--border);
+}
+
+/* ─── Toolbar ─── */
+.panel-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+}
+
+.toolbar-label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.03em;
+}
+
+.toolbar-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.icon-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--muted);
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.icon-btn:hover {
+    color: var(--text);
+    background: var(--surface2);
+    border-color: var(--border);
+}
+
+/* ─── CodeMirror ─── */
 #editor-wrapper {
-    border: 1px solid #444c56;  /* Lighter border for the editor */
-    border-radius: 6px;
-    margin-bottom: 20px;
+    flex: 1;
+    overflow: hidden;
 }
 
 .CodeMirror {
-    font-size: 16px;  /* Slightly larger font for better readability */
-    background-color: #2d333b;  /* Matching background color */
-    color: #e1e4e8;  /* Light text color */
-    height: 400px;  /* Editor height */
-    overflow: hidden;
-    border-radius: 6px;
-    line-height: 1.6;
-    padding: 10px;
+    font-family: var(--font-mono) !important;
+    font-size: 14px;
+    line-height: 1.7;
+    height: 100%;
+    background: var(--surface) !important;
+    color: var(--text) !important;
+}
+
+.CodeMirror-scroll {
+    padding-bottom: 0;
 }
 
 .CodeMirror-gutters {
-    background: #2d333b;
-    border-right: 1px solid #444c56;
+    background: var(--surface) !important;
+    border-right: 1px solid var(--border) !important;
+    padding-right: 4px;
 }
 
 .CodeMirror-linenumber {
-    color: #57606a;  /* Lighter grey for line numbers */
+    color: var(--muted) !important;
+    font-size: 12px;
 }
 
 .CodeMirror-cursor {
-    border-left: 2px solid #ffffff;  /* White cursor like GitHub's editor */
+    border-left: 2px solid var(--accent) !important;
 }
 
-/* Buttons and interactive elements */
-.run-btn,
-.save-btn {
-    width: 100%;
-    background-color: #28a745; /* Green color for buttons like GitHub's buttons */
-    color: white;
+.CodeMirror-selected {
+    background: var(--accent-glow) !important;
+}
+
+/* ─── Run Bar ─── */
+.run-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+}
+
+.shortcut-hint {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    border: 1px solid var(--border-hi);
+    border-radius: 4px;
+    color: var(--muted);
+    background: var(--surface2);
+    line-height: 1.5;
+}
+
+.run-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 20px;
+    background: var(--accent);
+    color: #fff;
     border: none;
-    padding: 14px;
-    font-size: 16px;
-    font-weight: 500;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 700;
     cursor: pointer;
-    transition: background 0.3s ease, transform 0.3s ease;
-    margin-top: 20px;
+    letter-spacing: 0.01em;
+    transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+    box-shadow: 0 0 0 0 var(--accent-glow);
 }
 
-.run-btn:hover,
-.save-btn:hover {
-    background-color: #218838; /* Darker green on hover */
-    transform: scale(1.05); /* Subtle scaling effect */
+.run-btn:hover {
+    opacity: 0.9;
+    box-shadow: 0 0 20px var(--accent-glow);
 }
 
-.run-btn:active,
-.save-btn:active {
-    background-color: #1e7e34; /* Even darker on click */
+.run-btn:active {
+    transform: scale(0.97);
 }
 
-/* Output container */
-.output-container {
-    margin-top: 20px;
-    font-size: 16px;
-    border: 1px solid #444c56;
-    border-radius: 6px;
-    padding: 20px;
-    background: #2d333b; /* Same dark background as editor */
-    color: #e1e4e8;
-    max-height: 500px;
+.run-btn.running {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* ─── Output Area ─── */
+#output-area {
+    flex: 1;
     overflow-y: auto;
+    padding: 20px;
+    position: relative;
+}
+
+.output-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    height: 100%;
+    min-height: 200px;
+    color: var(--muted);
+}
+
+.output-placeholder p {
+    font-size: 13px;
+    letter-spacing: 0.02em;
+}
+
+.output-text {
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    line-height: 1.75;
+    color: var(--green);
     white-space: pre-wrap;
-    word-wrap: break-word;
+    word-break: break-word;
 }
 
-.CodeMirror-vscrollbar div,
-.CodeMirror-hscrollbar div {
-    background-color: #444c56;
-    border-radius: 6px;
+.error-text {
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    line-height: 1.75;
+    color: var(--red);
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
-/* Input Fields */
+/* ─── Input Prompt ─── */
+.input-prompt-area {
+    margin-top: 16px;
+}
+
+.input-prompt-heading {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--yellow);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+    animation: fadeSlide 0.2s ease;
+}
+
+@keyframes fadeSlide {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.input-group label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+}
+
 .user-input {
-    padding: 14px;
-    font-size: 16px;
-    border: 1px solid #444c56;
-    border-radius: 8px;
-    outline: none;
-    background: #2d333b;
-    color: #e1e4e8;
-    transition: border-color 0.3s ease;
     width: 100%;
+    padding: 9px 12px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--radius-sm);
+    outline: none;
+    transition: border-color 0.15s;
 }
 
 .user-input:focus {
-    border-color: #0078d4; /* Blue focus border like GitHub */
+    border-color: var(--accent);
 }
 
-/* Flex Layouts */
-.input-group {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+.submit-inputs-btn {
+    margin-top: 4px;
+    padding: 8px 18px;
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
 }
 
-.inputs-container {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    align-items: center;
+.submit-inputs-btn:hover {
+    background: var(--accent);
+    color: #fff;
 }
 
-/* For smooth input field appearance */
-.input-group {
-    animation: fadeIn 0.3s ease-in-out;
+/* ─── Status Bar ─── */
+.status-bar {
+    padding: 8px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
 }
 
-@keyframes fadeIn {
-    0% {
-        opacity: 0;
-    }
-    100% {
-        opacity: 1;
-    }
+.status-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.05em;
 }
+
+.status-idle    { color: var(--muted); }
+.status-running { color: var(--yellow); }
+.status-success { color: var(--green); }
+.status-error   { color: var(--red); }
+
+/* ─── Spinner ─── */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.spinner {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 1.5px solid var(--muted);
+    border-top-color: var(--yellow);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+/* ─── Utility ─── */
+.hidden {
+    display: none !important;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
