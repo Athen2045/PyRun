@@ -1,142 +1,219 @@
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize CodeMirror for the code editor with specific options
-    const editor = CodeMirror.fromTextArea(document.getElementById("code"), {
-        lineNumbers: true,  // Display line numbers in the editor
-        mode: "python",  // Set the editor to Python language mode
-        theme: "material",  // Set the theme to 'material' for a sleek look
-        indentUnit: 4,  // Set the indentation size to 4 spaces
-        smartIndent: true,  // Enable smart indentation for Python
-        matchBrackets: true,  // Highlight matching brackets
-        autoCloseBrackets: true,  // Automatically close brackets
-        lineWrapping: true  // Enable line wrapping for long lines of code
+document.addEventListener('DOMContentLoaded', function () {
+
+    // ── Editor setup ──────────────────────────────────────────────
+    const editor = CodeMirror.fromTextArea(document.getElementById('code'), {
+        lineNumbers:       true,
+        mode:              'python',
+        theme:             'dracula',
+        indentUnit:        4,
+        smartIndent:       true,
+        matchBrackets:     true,
+        autoCloseBrackets: true,
+        lineWrapping:      true,
+        extraKeys: {
+            'Ctrl-Enter': () => compileCode(),
+            'Cmd-Enter':  () => compileCode(),
+        }
     });
 
-    // Set default code in the editor (Hello World in Python)
-    editor.setValue("print('Hello, World!')");
+    editor.setValue("# Press Ctrl+Enter or click Run\nprint('Hello, World!')");
 
-    // Function to execute the code in the editor with provided inputs
-    async function executeCode(code, inputs = []) {
-        const outputElement = document.getElementById("output");
-        outputElement.textContent = "Compiling...";  // Show compiling message
+    // ── DOM refs ──────────────────────────────────────────────────
+    const runBtn        = document.getElementById('run-btn');
+    const clearBtn      = document.getElementById('clear-btn');
+    const copyBtn       = document.getElementById('copy-btn');
+    const saveBtn       = document.getElementById('save-btn');
+    const clearOutBtn   = document.getElementById('clear-output-btn');
+    const outputEl      = document.getElementById('output');
+    const errorEl       = document.getElementById('error-output');
+    const placeholder   = document.getElementById('placeholder');
+    const inputArea     = document.getElementById('input-prompt-area');
+    const statusLabel   = document.getElementById('status-label');
 
-        // Replace each input() call with corresponding user input
-        let inputIndex = 0;
-        code = code.replace(/input\(\s*['"]?([^'"]*)['"]?\s*\)/g, () => {
-            return `'${inputs[inputIndex++] || ""}'`;
-        });
+    // ── Status helper ─────────────────────────────────────────────
+    function setStatus(state, text) {
+        statusLabel.className = 'status-label status-' + state;
+        statusLabel.innerHTML = state === 'running'
+            ? `<span class="spinner"></span>${text}`
+            : `● ${text}`;
+    }
+
+    // ── Show/hide output sections ─────────────────────────────────
+    function showOutput(stdout, stderr) {
+        placeholder.classList.add('hidden');
+        inputArea.classList.add('hidden');
+        inputArea.innerHTML = '';
+
+        if (stdout) {
+            outputEl.textContent = stdout;
+            outputEl.classList.remove('hidden');
+        } else {
+            outputEl.classList.add('hidden');
+        }
+
+        if (stderr) {
+            errorEl.textContent = stderr;
+            errorEl.classList.remove('hidden');
+        } else {
+            errorEl.classList.add('hidden');
+        }
+    }
+
+    function resetOutput() {
+        outputEl.classList.add('hidden');
+        errorEl.classList.add('hidden');
+        inputArea.classList.add('hidden');
+        placeholder.classList.remove('hidden');
+        outputEl.textContent = '';
+        errorEl.textContent  = '';
+        inputArea.innerHTML  = '';
+        setStatus('idle', 'idle');
+    }
+
+    // ── Piston API execution ──────────────────────────────────────
+    async function executeCode(code, stdinValue = '') {
+        setStatus('running', 'running…');
+        runBtn.classList.add('running');
 
         try {
-            // Make an API request to execute the code via an online API (Piston API)
-            const response = await fetch("https://emkc.org/api/v2/piston/execute", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
+            const response = await fetch('https://emkc.org/api/v2/piston/execute', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    language: "python",  // Specify the language as Python
-                    version: "3.10.0",  // Specify Python version
-                    files: [{ content: code }]  // Send the code as file content
+                    language: 'python',
+                    version:  '3.10.0',
+                    files:    [{ content: code }],
+                    stdin:    stdinValue
                 })
             });
 
-            // If the response is not OK, throw an error
-            if (!response.ok) {
-                throw new Error("Failed to execute code");
-            }
+            if (!response.ok) throw new Error(`API error ${response.status}`);
 
-            // Parse the response and extract the output from the execution
             const result = await response.json();
-            const output = result.run.stdout || result.run.output || "No output!";
-            outputElement.innerHTML = `> ${output}`;  // Display the output in the output container
-        } catch (error) {
-            outputElement.textContent = "Error: " + error.message;  // Handle errors by displaying error message
+            const stdout = result.run.stdout || '';
+            const stderr = result.run.stderr || '';
+
+            showOutput(stdout || (stderr ? '' : '(no output)'), stderr);
+            setStatus(stderr ? 'error' : 'success', stderr ? 'error' : `done`);
+
+        } catch (err) {
+            showOutput('', `Network error: ${err.message}`);
+            setStatus('error', 'error');
+        } finally {
+            runBtn.classList.remove('running');
         }
     }
 
-    // Function to compile the code and check if input() is required
-    async function compileCode() {
-        const code = editor.getValue();  // Get the current code from the editor
-        const outputElement = document.getElementById("output");
-        outputElement.textContent = "Compiling...";  // Show compiling message
+    // ── Input detection & prompt UI ───────────────────────────────
+    //  Uses the Piston `stdin` field — feeds a newline-separated string
+    //  so real Python input() works correctly (no source rewriting).
+    function buildInputUI(prompts) {
+        placeholder.classList.add('hidden');
+        outputEl.classList.add('hidden');
+        errorEl.classList.add('hidden');
+        inputArea.classList.remove('hidden');
+        inputArea.innerHTML = '';
 
-        // Regular expression to check if input() is called in the code
-        const inputPattern = /input\(\s*['"]?([^'"]*)['"]?\s*\)/g;
-        const inputPrompts = [...code.matchAll(inputPattern)].map(match => match[1]);  // Get all prompts for inputs
+        const heading = document.createElement('p');
+        heading.className = 'input-prompt-heading';
+        heading.textContent = 'Input required';
+        inputArea.appendChild(heading);
 
-        // If input() is found, ask the user for inputs
-        if (inputPrompts.length > 0) {
-            outputElement.innerHTML = "<h3>Provide Input:</h3>";  // Show input prompts message
+        const fields = [];
+        prompts.forEach((prompt, i) => {
+            const group = document.createElement('div');
+            group.className = 'input-group';
 
-            // Create a container to hold all the input fields
-            const inputsContainer = document.createElement("div");
-            inputsContainer.classList.add("inputs-container");
+            const label = document.createElement('label');
+            label.setAttribute('for', `user-input-${i}`);
+            label.textContent = prompt || `input ${i + 1}`;
 
-            // Create an input field for each prompt found in the code
-            inputPrompts.forEach((prompt, index) => {
-                const inputGroup = document.createElement('div');
-                inputGroup.classList.add('input-group');
+            const input = document.createElement('input');
+            input.type        = 'text';
+            input.id          = `user-input-${i}`;
+            input.className   = 'user-input';
+            input.placeholder = 'Enter value…';
 
-                const label = document.createElement('label');
-                label.setAttribute('for', `input-${index}`);
-                label.textContent = prompt;  // Set the label as the prompt from the input() call
+            group.appendChild(label);
+            group.appendChild(input);
+            inputArea.appendChild(group);
+            fields.push(input);
+        });
 
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.id = `input-${index}`;
-                input.classList.add('user-input');  // Add class for styling
+        const submitBtn = document.createElement('button');
+        submitBtn.className = 'submit-inputs-btn';
+        submitBtn.textContent = 'Submit & Run';
+        inputArea.appendChild(submitBtn);
 
-                inputGroup.appendChild(label);
-                inputGroup.appendChild(input);
-                inputsContainer.appendChild(inputGroup);
+        // Focus first input for usability
+        if (fields[0]) fields[0].focus();
+
+        submitBtn.addEventListener('click', () => {
+            const stdin = fields.map(f => f.value).join('\n');
+            executeCode(editor.getValue(), stdin);
+        });
+
+        // Allow Enter key on last input to submit
+        if (fields.length > 0) {
+            fields[fields.length - 1].addEventListener('keydown', e => {
+                if (e.key === 'Enter') submitBtn.click();
             });
-
-            outputElement.appendChild(inputsContainer);  // Add the input fields container to the output area
-
-            // Create a submit button for the inputs
-            const submitButton = document.createElement('button');
-            submitButton.id = 'submit-inputs-btn';
-            submitButton.textContent = 'Submit Inputs';
-            outputElement.appendChild(submitButton);
-
-            // Add click event listener to submit button
-            submitButton.addEventListener('click', submitInputs);
-            return;  // Stop here until inputs are submitted
         }
-
-        // If no input() calls are found, execute the code
-        await executeCode(code);
     }
 
-    // Collect the inputs from the user and rerun the code with these inputs
-    function submitInputs() {
-        const inputs = Array.from(document.querySelectorAll('.user-input')).map(input => input.value);  // Get all input values
-        const code = editor.getValue();  // Get the current code from the editor
-        executeCode(code, inputs);  // Execute the code with the provided inputs
+    // ── Detect input() calls (labels only, no source surgery) ─────
+    function getInputPrompts(code) {
+        const re = /input\(\s*(?:['"`]([^'"`]*)['"`])?\s*\)/g;
+        const prompts = [];
+        let m;
+        while ((m = re.exec(code)) !== null) {
+            prompts.push(m[1] || '');
+        }
+        return prompts;
     }
 
-    // Add event listener to the run button to trigger code compilation
-    const runButton = document.querySelector(".run-btn");
-    if (runButton) {
-        runButton.addEventListener("click", compileCode);
+    // ── Main compile handler ──────────────────────────────────────
+    function compileCode() {
+        const code = editor.getValue().trim();
+        if (!code) return;
+
+        const prompts = getInputPrompts(code);
+        if (prompts.length > 0) {
+            buildInputUI(prompts);
+            setStatus('idle', 'waiting for input');
+        } else {
+            executeCode(code);
+        }
     }
 
-    // Function to save the output to a text file
-    function saveOutputToFile() {
-        const output = document.getElementById("output").textContent;  // Get the output text
-        const blob = new Blob([output], { type: 'text/plain' });  // Create a Blob object containing the output
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);  // Create a URL for the Blob
-        link.download = "output.txt";  // Set the download file name
-        link.click();  // Trigger the download by clicking the link
-    }
+    // ── Button listeners ──────────────────────────────────────────
+    runBtn.addEventListener('click', compileCode);
 
-    // Create and append the 'Save Output' button to the output container
-    const saveButton = document.createElement('button');
-    saveButton.textContent = 'Save Output';
-    saveButton.classList.add('save-btn');  // Optional: add a class for styling
-    saveButton.addEventListener('click', saveOutputToFile);
+    clearBtn.addEventListener('click', () => {
+        editor.setValue('');
+        editor.focus();
+    });
 
-    // Append the Save Output button to the output-container (after output)
-    const outputContainer = document.querySelector('.output-container');
-    if (outputContainer) {
-        outputContainer.appendChild(saveButton);
-    }
+    copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(editor.getValue()).then(() => {
+            copyBtn.title = 'Copied!';
+            setTimeout(() => (copyBtn.title = 'Copy code'), 1500);
+        });
+    });
+
+    saveBtn.addEventListener('click', () => {
+        const stdout = outputEl.textContent;
+        const stderr = errorEl.textContent;
+        const content = [stdout, stderr].filter(Boolean).join('\n\n--- stderr ---\n\n');
+        if (!content) return;
+        const blob = new Blob([content], { type: 'text/plain' });
+        const a    = document.createElement('a');
+        a.href     = URL.createObjectURL(blob);
+        a.download = 'output.txt';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    });
+
+    clearOutBtn.addEventListener('click', resetOutput);
+
 });
