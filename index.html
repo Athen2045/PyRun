@@ -1,31 +1,83 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title>Online Python Compiler</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/theme/material.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PyRun — Online Python Compiler</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/theme/dracula.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <div class="container">
-    <div class="editor-container">
-        <h1>Python Compiler</h1>
+<header class="site-header">
+    <div class="brand">
+        <span class="brand-icon">⬡</span>
+        <span class="brand-name">PyRun</span>
+    </div>
+    <div class="header-meta">Python 3.10 &nbsp;·&nbsp; Piston API</div>
+</header>
+
+<main class="layout">
+
+    <section class="editor-panel">
+        <div class="panel-toolbar">
+            <span class="toolbar-label">main.py</span>
+            <div class="toolbar-actions">
+                <button id="clear-btn" class="icon-btn" title="Clear editor">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                </button>
+                <button id="copy-btn" class="icon-btn" title="Copy code">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                </button>
+            </div>
+        </div>
         <div id="editor-wrapper">
             <textarea id="code"></textarea>
         </div>
-        <button class="run-btn">Run</button>
-    </div>
+        <div class="run-bar">
+            <span class="shortcut-hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> to run</span>
+            <button id="run-btn" class="run-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Run
+            </button>
+        </div>
+    </section>
 
-    <div class="output-container">
-        <pre id="output">> Output will appear here ...</pre>
-    </div>
-</div>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/python/python.min.js"></script>
-    <script src="script.js"></script>
+    <section class="output-panel">
+        <div class="panel-toolbar">
+            <span class="toolbar-label">output</span>
+            <div class="toolbar-actions">
+                <button id="save-btn" class="icon-btn" title="Save output">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </button>
+                <button id="clear-output-btn" class="icon-btn" title="Clear output">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <div id="output-area">
+            <div id="placeholder" class="output-placeholder">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <p>Run your code to see output</p>
+            </div>
+            <pre id="output" class="output-text hidden"></pre>
+            <div id="error-output" class="error-text hidden"></div>
+            <div id="input-prompt-area" class="input-prompt-area hidden"></div>
+        </div>
+
+        <div id="status-bar" class="status-bar">
+            <span id="status-label" class="status-idle">● idle</span>
+        </div>
+    </section>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/python/python.min.js"></script>
+<script src="script.js"></script>
 </body>
 </html>
