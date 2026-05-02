@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', function () {
 
-    // ── DOM refs — defined first so every function below can safely use them ──
+    // ── DOM refs ──────────────────────────────────────────────────
     const runBtn      = document.getElementById('run-btn');
     const clearBtn    = document.getElementById('clear-btn');
     const copyBtn     = document.getElementById('copy-btn');
@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', function () {
             : `● ${text}`;
     }
 
-    // ── Show/hide output sections ─────────────────────────────────
+    // ── Output helpers ────────────────────────────────────────────
     function showOutput(stdout, stderr) {
         placeholder.classList.add('hidden');
         inputArea.classList.add('hidden');
@@ -71,7 +71,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ── Pyodide runtime load ──────────────────────────────────────
-    // Called AFTER DOM refs and helpers are defined so runBtn/setStatus exist.
     let pyodide = null;
 
     async function loadPyodideRuntime() {
@@ -83,6 +82,8 @@ document.addEventListener('DOMContentLoaded', function () {
             pyodide = await loadPyodide({
                 indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.27.5/full/'
             });
+            // Bootstrap micropip so we can install PyPI packages later
+            await pyodide.loadPackage('micropip');
             setStatus('idle', 'ready');
         } catch (err) {
             setStatus('error', 'failed to load runtime');
@@ -94,17 +95,116 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    loadPyodideRuntime(); // safe to call now — runBtn and setStatus are defined above
+    loadPyodideRuntime();
 
-    // ── Pyodide execution ─────────────────────────────────────────
-    async function executeCode(code, stdinValues = []) {
+    // ── Package resolution ────────────────────────────────────────
+    // Packages built into Pyodide — loaded via pyodide.loadPackage() (fast, no network install)
+    const PYODIDE_PACKAGES = new Set([
+        'numpy', 'pandas', 'matplotlib', 'scipy', 'scikit-learn', 'sklearn',
+        'sympy', 'networkx', 'pillow', 'PIL', 'lxml', 'beautifulsoup4', 'bs4',
+        'requests', 'cryptography', 'regex', 'pytz', 'pydantic', 'attrs',
+        'hypothesis', 'sqlite3', 'openpyxl', 'pytest', 'jinja2',
+        'pygments', 'six', 'dateutil', 'packaging', 'toolz', 'cytoolz',
+        'statsmodels', 'patsy', 'joblib', 'threadpoolctl', 'xarray',
+        'pyyaml', 'yaml', 'toml', 'ujson', 'msgpack',
+    ]);
+
+    // Map import names → install names where they differ
+    const PACKAGE_NAME_MAP = {
+        'sklearn':         'scikit-learn',
+        'PIL':             'pillow',
+        'bs4':             'beautifulsoup4',
+        'yaml':            'pyyaml',
+        'dateutil':        'python-dateutil',
+        'cv2':             'opencv-python',
+        'Image':           'pillow',
+    };
+
+    // Stdlib modules — never try to install these
+    const STDLIB = new Set([
+        'abc', 'ast', 'asyncio', 'base64', 'binascii', 'builtins', 'calendar',
+        'cmath', 'codecs', 'collections', 'contextlib', 'copy', 'csv',
+        'dataclasses', 'datetime', 'decimal', 'difflib', 'enum', 'errno',
+        'fractions', 'functools', 'gc', 'glob', 'hashlib', 'heapq', 'hmac',
+        'html', 'http', 'inspect', 'io', 'itertools', 'json', 'logging',
+        'math', 'operator', 'os', 'pathlib', 'pickle', 'platform', 'pprint',
+        'queue', 'random', 're', 'shutil', 'signal', 'socket', 'sqlite3',
+        'statistics', 'string', 'struct', 'subprocess', 'sys', 'tempfile',
+        'textwrap', 'threading', 'time', 'timeit', 'traceback', 'types',
+        'typing', 'unicodedata', 'unittest', 'urllib', 'uuid', 'warnings',
+        'weakref', 'xml', 'xmlrpc', 'zipfile', 'zlib', '_thread',
+    ]);
+
+    // Extract top-level import names from code
+    function extractImports(code) {
+        const imports = new Set();
+        const patterns = [
+            /^import\s+([\w]+)/gm,               // import numpy
+            /^import\s+([\w]+)\s+as\s+\w+/gm,    // import numpy as np
+            /^from\s+([\w]+)\s+import/gm,         // from pandas import ...
+        ];
+        for (const re of patterns) {
+            let m;
+            while ((m = re.exec(code)) !== null) {
+                imports.add(m[1]);
+            }
+        }
+        return imports;
+    }
+
+    // Install all third-party packages detected in the code
+    async function installPackages(code) {
+        const imports = extractImports(code);
+        const toInstall = [];
+
+        for (const name of imports) {
+            if (STDLIB.has(name)) continue;           // skip stdlib
+            if (name.startsWith('_')) continue;       // skip private/internal
+
+            const installName = PACKAGE_NAME_MAP[name] || name;
+
+            // Check if already loaded in this session
+            try {
+                await pyodide.runPythonAsync(`import ${name}`);
+                continue; // already available, skip
+            } catch (_) {}
+
+            toInstall.push({ importName: name, installName });
+        }
+
+        if (toInstall.length === 0) return;
+
+        for (const pkg of toInstall) {
+            setStatus('running', `installing ${pkg.installName}…`);
+            try {
+                if (PYODIDE_PACKAGES.has(pkg.importName) || PYODIDE_PACKAGES.has(pkg.installName)) {
+                    // Use Pyodide's prebuilt wheels (faster)
+                    await pyodide.loadPackage(pkg.installName);
+                } else {
+                    // Fall back to micropip for pure-Python PyPI packages
+                    const micropip = pyodide.pyimport('micropip');
+                    await micropip.install(pkg.installName);
+                }
+            } catch (err) {
+                // Non-fatal: let Python itself throw the ImportError with a clear message
+                console.warn(`Could not install ${pkg.installName}:`, err.message);
+            }
+        }
+    }
+
+    // ── Code execution ────────────────────────────────────────────
+    async function executeCode(code) {
         setStatus('running', 'running…');
         runBtn.classList.add('running');
+        runBtn.disabled = true;
 
         try {
-            pyodide.globals.set('_js_stdin_values', pyodide.toPy(stdinValues));
+            // Auto-install any imported packages before running
+            await installPackages(code);
 
-            const setupCode = `
+            setStatus('running', 'running…');
+
+            await pyodide.runPythonAsync(`
 import sys, io, builtins
 
 _captured_stdout = io.StringIO()
@@ -112,20 +212,17 @@ _captured_stderr = io.StringIO()
 sys.stdout = _captured_stdout
 sys.stderr = _captured_stderr
 
-_stdin_values = list(_js_stdin_values)
-_stdin_idx = [0]
+def _js_input(prompt=''):
+    import js
+    result = js.prompt(str(prompt))
+    if result is None:
+        result = ''
+    sys.stdout.write(str(prompt) + str(result) + '\\n')
+    return result
 
-def _custom_input(prompt=''):
-    if _stdin_idx[0] < len(_stdin_values):
-        val = _stdin_values[_stdin_idx[0]]
-        _stdin_idx[0] += 1
-        sys.stdout.write(str(prompt) + str(val) + '\\n')
-        return val
-    return ''
+builtins.input = _js_input
+`);
 
-builtins.input = _custom_input
-`;
-            await pyodide.runPythonAsync(setupCode);
             await pyodide.runPythonAsync(code);
 
             const stdout = pyodide.globals.get('_captured_stdout').getvalue();
@@ -147,69 +244,7 @@ builtins.input = input
 `);
             } catch (_) {}
             runBtn.classList.remove('running');
-        }
-    }
-
-    // ── Detect input() calls ──────────────────────────────────────
-    function getInputPrompts(code) {
-        const re = /input\(\s*(?:['"`]([^'"`]*)['"`])?\s*\)/g;
-        const prompts = [];
-        let m;
-        while ((m = re.exec(code)) !== null) {
-            prompts.push(m[1] || '');
-        }
-        return prompts;
-    }
-
-    // ── Input prompt UI ───────────────────────────────────────────
-    function buildInputUI(prompts) {
-        placeholder.classList.add('hidden');
-        outputEl.classList.add('hidden');
-        errorEl.classList.add('hidden');
-        inputArea.classList.remove('hidden');
-        inputArea.innerHTML = '';
-
-        const heading = document.createElement('p');
-        heading.className = 'input-prompt-heading';
-        heading.textContent = 'Input required';
-        inputArea.appendChild(heading);
-
-        const fields = [];
-        prompts.forEach((prompt, i) => {
-            const group = document.createElement('div');
-            group.className = 'input-group';
-
-            const label = document.createElement('label');
-            label.setAttribute('for', `user-input-${i}`);
-            label.textContent = prompt || `input ${i + 1}`;
-
-            const input = document.createElement('input');
-            input.type        = 'text';
-            input.id          = `user-input-${i}`;
-            input.className   = 'user-input';
-            input.placeholder = 'Enter value…';
-
-            group.appendChild(label);
-            group.appendChild(input);
-            inputArea.appendChild(group);
-            fields.push(input);
-        });
-
-        const submitBtn = document.createElement('button');
-        submitBtn.className   = 'submit-inputs-btn';
-        submitBtn.textContent = 'Submit & Run';
-        inputArea.appendChild(submitBtn);
-
-        if (fields[0]) fields[0].focus();
-
-        submitBtn.addEventListener('click', () => {
-            executeCode(editor.getValue(), fields.map(f => f.value));
-        });
-
-        if (fields.length > 0) {
-            fields[fields.length - 1].addEventListener('keydown', e => {
-                if (e.key === 'Enter') submitBtn.click();
-            });
+            runBtn.disabled = false;
         }
     }
 
@@ -217,14 +252,7 @@ builtins.input = input
     function compileCode() {
         const code = editor.getValue().trim();
         if (!code) return;
-
-        const prompts = getInputPrompts(code);
-        if (prompts.length > 0) {
-            buildInputUI(prompts);
-            setStatus('idle', 'waiting for input');
-        } else {
-            executeCode(code);
-        }
+        executeCode(code);
     }
 
     // ── Button listeners ──────────────────────────────────────────
