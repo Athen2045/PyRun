@@ -243,10 +243,12 @@ kbd {
     transform: scale(0.97);
 }
 
-.run-btn.running {
-    opacity: 0.6;
+.run-btn.running,
+.run-btn:disabled {
+    opacity: 0.55;
     cursor: not-allowed;
     pointer-events: none;
+    box-shadow: none;
 }
 
 /* ─── Output Area ─── */
