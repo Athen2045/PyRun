@@ -1,57 +1,213 @@
-# Python Compiler Online
+# PyRun — Online Python Compiler
 
-## Overview
-This is an online Python compiler that allows users to write, run, and execute Python code directly from the browser. The app features a text editor with syntax highlighting, dynamic input handling, and the ability to save the output to a `.txt` file.
+> A zero-install, browser-native Python compiler powered by WebAssembly. Write, run, and experiment with Python entirely in your browser — no server, no setup, no limits.
 
-## Features
-- **Code Editor**: Integrated with CodeMirror, providing syntax highlighting, line numbers, and code formatting for Python.
-- **Run Button**: Users can execute Python code directly from the editor.
-- **Dynamic Input Handling**: If the code contains `input()` prompts, users are asked to provide inputs through the UI.
-- **Save Output**: After executing the code, users can download the output as a `.txt` file.
+![PyRun Screenshot](https://pythoncomplier.netlify.app/)
 
-## Technologies Used
-- **HTML**: Structure of the page.
-- **CSS**: Styling for the page and elements.
-- **JavaScript**: Code functionality, including interaction with the CodeMirror editor and API calls.
-- **CodeMirror**: A versatile code editor embedded in the application.
-- **EMKC Piston API**: Used to execute Python code remotely.
+&nbsp;
 
-## Live Demo:
-You can try the live demo of this project here: [Python Compiler Online](https://pythoncomplier.netlify.app/)
+## Demo:
 
-## Setup
+**[https://pythoncomplier.netlify.app/](https://pythoncomplier.netlify.app/)**
 
-1. **Clone the repository**:
-    ```bash
-    git clone https://github.com/yourusername/python-compiler-online.git
-    ```
-    
-2. **Install Dependencies**:
-    No specific dependencies are required for this project as it utilizes external libraries (CodeMirror and the EMKC API).
+&nbsp;
 
-3. **Open the Project**:
-    Open `index.html` in your browser to view and use the Python compiler.
+## Overview:
 
-## How to Use
+PyRun is a client-side Python execution environment built with vanilla HTML, CSS, and JavaScript. It embeds a full Python 3.11 runtime directly in the browser using [Pyodide](https://pyodide.org/) (CPython compiled to WebAssembly), meaning code runs **locally on the user's machine** — no backend, no API keys, no network round-trips after the initial load.
 
-1. **Write Code**: Write your Python code in the text editor.
-2. **Input Handling**: If your code contains `input()` statements, you will be prompted to provide input fields for the code to work with.
-3. **Run Code**: Click the **Run** button to execute the code. The output will appear in the output container.
-4. **Save Output**: After running the code, click the **Save Output** button to download the results in a `.txt` file.
+The project started as a simple code-runner and evolved into a feature-complete playground with auto package installation, real-time `input()` handling, stderr/stdout separation, and a professional split-panel IDE layout.
 
-## Customization
+&nbsp;
 
-- **Change the default code**: The default Python code is set to `print('Hello, World!')`. You can change this to any other code in the `script.js` file.
-  
-- **Styling**: Customize the appearance of the application by modifying the `style.css` file.
+## Features:
+
+| Feature | Details |
+|---|---|
+| **In-browser Python runtime** | Full CPython 3.11 via Pyodide + WebAssembly — runs offline after first load |
+| **Syntax-highlighted editor** | CodeMirror 6 with the Dracula theme, line numbers, bracket matching, and auto-indent |
+| **Keyboard shortcut** | `Ctrl + Enter` / `Cmd + Enter` to run — no mouse needed |
+| **Auto package installation** | Detects `import` statements and installs packages via `pyodide.loadPackage()` or `micropip` before execution |
+| **Live `input()` support** | Python's `input()` is intercepted and routed to a native browser prompt — works in loops, conditionals, any pattern |
+| **Stdout / stderr separation** | Output and tracebacks are displayed distinctly — green for output, red for errors |
+| **Save output** | Download execution output as a `.txt` file |
+| **Copy code** | One-click copy of the editor contents to clipboard |
+| **Status bar** | Real-time feedback: idle → loading runtime → installing packages → running → done/error |
+| **Responsive layout** | Split-panel IDE layout that stacks vertically on mobile |
+
+&nbsp;
+
+## Stack Used:
+
+- **HTML5 / CSS3 / Vanilla JavaScript** — no frameworks, no build step
+- **[Pyodide v0.27.5](https://pyodide.org/)** — CPython compiled to WebAssembly; runs Python natively in the browser
+- **[micropip](https://micropip.pyodide.org/)** — installs pure-Python packages from PyPI at runtime
+- **[CodeMirror 6](https://codemirror.net/)** — embedded code editor with Python syntax highlighting
+- **[Netlify](https://netlify.com/)** — static site hosting with zero configuration
+
+&nbsp;
+
+## Supported Libraries:
+
+PyRun auto-detects and installs third-party packages before running your code. No `pip install` needed.
+
+**Bundled with Pyodide** *(fast, precompiled wheels)*
+
+`numpy` · `pandas` · `matplotlib` · `scipy` · `scikit-learn` · `sympy` · `networkx` · `Pillow` · `beautifulsoup4` · `requests` · `cryptography` · `statsmodels` · `xarray` · `openpyxl` · `pydantic` · and more
+
+**Via micropip** *(pure-Python PyPI packages)*
+
+Any package without C extensions can be installed on demand — just `import` it and PyRun handles the rest.
+
+> **Note:** Packages with compiled C extensions not built for WASM (e.g. `torch`, `tensorflow`, `opencv-python`) are not supported in the browser environment.
+
+&nbsp;
+
+## How Start:
+
+### Run locally
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/pyrun-compiler.git
+
+# Navigate into the project
+cd pyrun-compiler
+
+# Open in your browser — no build step required
+open index.html
+```
+
+No package manager, no dependencies to install. The project is entirely static.
+
+### Deploy your own
+
+Since PyRun is a pure static site, it can be deployed to any static host:
+
+```bash
+# Netlify (drag-and-drop or CLI)
+netlify deploy --prod --dir .
+
+# GitHub Pages
+# Push to a repo and enable Pages from Settings → Pages → Deploy from branch
+```
+
+&nbsp;
+
+## How to Use:
+
+1. **Write** — Type your Python code in the left editor panel
+2. **Run** — Click **Run** or press `Ctrl+Enter`
+3. **Input** — If your code calls `input()`, a browser prompt will appear for each call
+4. **View output** — Results appear in the right panel; errors are highlighted in red
+5. **Save** — Click the download icon to save output as `output.txt`
+
+### Example — works out of the box
+
+```python
+import numpy as np
+
+arr = np.array([1, 2, 3, 4, 5])
+print("Mean:", np.mean(arr))
+print("Std: ", np.std(arr))
+```
+
+```python
+name = input("What's your name? ")
+age  = input("How old are you? ")
+print(f"Hello {name}, you are {age} years old!")
+```
+
+&nbsp;
+
+## Project Structure:
+
+```
+pyrun-compiler/
+├── index.html      # App shell — layout, toolbar, panels
+├── style.css       # Full visual design system (CSS variables, dark theme, responsive)
+└── script.js       # All runtime logic — Pyodide init, package resolution, execution, UI
+```
+
+&nbsp;
+
+## Customization Options:
+
+**Change the default editor code**
+
+In `script.js`, find and edit the `editor.setValue(...)` line:
+
+```js
+editor.setValue("# Your default code here\nprint('Hello, World!')");
+```
+
+**Add more known packages to the Pyodide set**
+
+In `script.js`, extend `PYODIDE_PACKAGES`:
+
+```js
+const PYODIDE_PACKAGES = new Set([
+    'numpy', 'pandas', /* add your package here */
+]);
+```
+
+**Theme / colors**
+
+All design tokens live in the `:root` block in `style.css`:
+
+```css
+:root {
+    --accent:  #7c6af5;   /* primary color */
+    --green:   #3ddc84;   /* stdout color  */
+    --red:     #ff6b6b;   /* stderr color  */
+    /* ... */
+}
+```
+
+&nbsp;
+
+## Known Limitations:
+
+- **Matplotlib plots** — graphical output (`plt.show()`) does not render in the browser canvas; use `print()` based output or save figures to a buffer instead
+- **C-extension packages** — libraries like `torch`, `tensorflow`, and `opencv-python` require native compilation and are not supported in the WASM environment
+- **File system access** — browser sandboxing means no access to the local file system; `open()` calls work with Pyodide's in-memory virtual filesystem only
+- **First load time** — Pyodide's WASM bundle is ~10 MB; subsequent loads are served from cache
+
+&nbsp;
 
 ## Contributing
-If you'd like to contribute, feel free to fork the repository and submit pull requests with your enhancements or bug fixes.
 
-## License
-This project is open source and available under the MIT License.
+Contributions are welcome! To get started:
 
-## Acknowledgments
-- **CodeMirror**: For providing a powerful and customizable code editor.
-- **EMKC Piston API**: For enabling us to execute Python code remotely via an API.
+```bash
+# Fork the repo, then clone your fork
+git clone https://github.com/yourusername/pyrun-compiler.git
 
+# Create a feature branch
+git checkout -b feature/your-feature-name
+
+# Make your changes, then open a pull request
+```
+
+Please keep PRs focused — one feature or fix per pull request.
+
+&nbsp;
+
+## 📄 License
+
+This project is open source and available under the [MIT License](LICENSE).
+
+&nbsp;
+
+## Acknowledgments:
+
+- **[Pyodide](https://pyodide.org/)** — for making a full Python runtime possible in the browser
+- **[CodeMirror](https://codemirror.net/)** — for the powerful, extensible code editor
+- **[micropip](https://micropip.pyodide.org/)** — for enabling PyPI package installs in WASM
+- **[Netlify](https://netlify.com/)** — for frictionless static site hosting
+
+&nbsp;
+
+---
+
+<p align="center">Built with 🐍 and WebAssembly · <a href="https://pythoncomplier.netlify.app/">Live Demo</a></p>
