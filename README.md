@@ -2,8 +2,6 @@
 
 > A zero-install, browser-native Python compiler powered by WebAssembly. Write, run, and experiment with Python entirely in your browser — no server, no setup, no limits.
 
-![PyRun Screenshot](https://pythoncomplier.netlify.app/)
-
 &nbsp;
 
 ## Demo:
