@@ -1,5 +1,24 @@
 document.addEventListener('DOMContentLoaded', function () {
 
+    // ── Pyodide setup ─────────────────────────────────────────────
+    // Python runs entirely in the browser via WebAssembly — no external API needed.
+    let pyodide = null;
+
+    async function loadPyodideRuntime() {
+        setStatus('running', 'loading Python runtime…');
+        try {
+            pyodide = await loadPyodide({
+                indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.27.5/full/'
+            });
+            setStatus('idle', 'ready');
+        } catch (err) {
+            setStatus('error', 'failed to load runtime');
+            showOutput('', `Failed to load Python runtime: ${err.message}`);
+        }
+    }
+
+    loadPyodideRuntime();
+
     // ── Editor setup ──────────────────────────────────────────────
     const editor = CodeMirror.fromTextArea(document.getElementById('code'), {
         lineNumbers:       true,
@@ -19,16 +38,16 @@ document.addEventListener('DOMContentLoaded', function () {
     editor.setValue("# Press Ctrl+Enter or click Run\nprint('Hello, World!')");
 
     // ── DOM refs ──────────────────────────────────────────────────
-    const runBtn        = document.getElementById('run-btn');
-    const clearBtn      = document.getElementById('clear-btn');
-    const copyBtn       = document.getElementById('copy-btn');
-    const saveBtn       = document.getElementById('save-btn');
-    const clearOutBtn   = document.getElementById('clear-output-btn');
-    const outputEl      = document.getElementById('output');
-    const errorEl       = document.getElementById('error-output');
-    const placeholder   = document.getElementById('placeholder');
-    const inputArea     = document.getElementById('input-prompt-area');
-    const statusLabel   = document.getElementById('status-label');
+    const runBtn      = document.getElementById('run-btn');
+    const clearBtn    = document.getElementById('clear-btn');
+    const copyBtn     = document.getElementById('copy-btn');
+    const saveBtn     = document.getElementById('save-btn');
+    const clearOutBtn = document.getElementById('clear-output-btn');
+    const outputEl    = document.getElementById('output');
+    const errorEl     = document.getElementById('error-output');
+    const placeholder = document.getElementById('placeholder');
+    const inputArea   = document.getElementById('input-prompt-area');
+    const statusLabel = document.getElementById('status-label');
 
     // ── Status helper ─────────────────────────────────────────────
     function setStatus(state, text) {
@@ -67,46 +86,91 @@ document.addEventListener('DOMContentLoaded', function () {
         outputEl.textContent = '';
         errorEl.textContent  = '';
         inputArea.innerHTML  = '';
-        setStatus('idle', 'idle');
+        setStatus('idle', 'ready');
     }
 
-    // ── Piston API execution ──────────────────────────────────────
-    async function executeCode(code, stdinValue = '') {
+    // ── Pyodide execution ─────────────────────────────────────────
+    // Redirects sys.stdout/stderr into JS strings, then restores them.
+    // Feeds stdin values via a custom Python input() override.
+    async function executeCode(code, stdinValues = []) {
+        if (!pyodide) {
+            showOutput('', 'Python runtime is still loading. Please wait a moment and try again.');
+            return;
+        }
+
         setStatus('running', 'running…');
         runBtn.classList.add('running');
 
         try {
-            const response = await fetch('https://emkc.org/api/v2/piston/execute', {
-                method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    language: 'python',
-                    version:  '3.10.0',
-                    files:    [{ content: code }],
-                    stdin:    stdinValue
-                })
-            });
+            let inputIndex = 0;
 
-            if (!response.ok) throw new Error(`API error ${response.status}`);
+            // Override Python's input() to pull from our stdinValues array
+            pyodide.globals.set('_js_stdin_values', pyodide.toPy(stdinValues));
+            pyodide.globals.set('_js_stdin_index', 0);
 
-            const result = await response.json();
-            const stdout = result.run.stdout || '';
-            const stderr = result.run.stderr || '';
+            const setupCode = `
+import sys
+import io
+
+_captured_stdout = io.StringIO()
+_captured_stderr = io.StringIO()
+sys.stdout = _captured_stdout
+sys.stderr = _captured_stderr
+
+_stdin_values = list(_js_stdin_values)
+_stdin_idx = [0]
+
+def _custom_input(prompt=''):
+    if _stdin_idx[0] < len(_stdin_values):
+        val = _stdin_values[_stdin_idx[0]]
+        _stdin_idx[0] += 1
+        sys.stdout.write(str(prompt) + str(val) + '\\n')
+        return val
+    return ''
+
+import builtins
+builtins.input = _custom_input
+`;
+            await pyodide.runPythonAsync(setupCode);
+            await pyodide.runPythonAsync(code);
+
+            const stdout = pyodide.globals.get('_captured_stdout').getvalue();
+            const stderr = pyodide.globals.get('_captured_stderr').getvalue();
 
             showOutput(stdout || (stderr ? '' : '(no output)'), stderr);
-            setStatus(stderr ? 'error' : 'success', stderr ? 'error' : `done`);
+            setStatus(stderr ? 'error' : 'success', stderr ? 'error' : 'done');
 
         } catch (err) {
-            showOutput('', `Network error: ${err.message}`);
+            // Pyodide surfaces Python tracebacks as JS errors
+            const traceback = err.message || String(err);
+            showOutput('', traceback);
             setStatus('error', 'error');
         } finally {
+            // Always restore real stdout/stderr
+            try {
+                await pyodide.runPythonAsync(`
+import sys, io, builtins
+sys.stdout = sys.__stdout__
+sys.stderr = sys.__stderr__
+builtins.input = input
+`);
+            } catch (_) {}
             runBtn.classList.remove('running');
         }
     }
 
-    // ── Input detection & prompt UI ───────────────────────────────
-    //  Uses the Piston `stdin` field — feeds a newline-separated string
-    //  so real Python input() works correctly (no source rewriting).
+    // ── Detect input() calls ──────────────────────────────────────
+    function getInputPrompts(code) {
+        const re = /input\(\s*(?:['"`]([^'"`]*)['"`])?\s*\)/g;
+        const prompts = [];
+        let m;
+        while ((m = re.exec(code)) !== null) {
+            prompts.push(m[1] || '');
+        }
+        return prompts;
+    }
+
+    // ── Input prompt UI ───────────────────────────────────────────
     function buildInputUI(prompts) {
         placeholder.classList.add('hidden');
         outputEl.classList.add('hidden');
@@ -141,35 +205,22 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         const submitBtn = document.createElement('button');
-        submitBtn.className = 'submit-inputs-btn';
+        submitBtn.className   = 'submit-inputs-btn';
         submitBtn.textContent = 'Submit & Run';
         inputArea.appendChild(submitBtn);
 
-        // Focus first input for usability
         if (fields[0]) fields[0].focus();
 
         submitBtn.addEventListener('click', () => {
-            const stdin = fields.map(f => f.value).join('\n');
-            executeCode(editor.getValue(), stdin);
+            const values = fields.map(f => f.value);
+            executeCode(editor.getValue(), values);
         });
 
-        // Allow Enter key on last input to submit
         if (fields.length > 0) {
             fields[fields.length - 1].addEventListener('keydown', e => {
                 if (e.key === 'Enter') submitBtn.click();
             });
         }
-    }
-
-    // ── Detect input() calls (labels only, no source surgery) ─────
-    function getInputPrompts(code) {
-        const re = /input\(\s*(?:['"`]([^'"`]*)['"`])?\s*\)/g;
-        const prompts = [];
-        let m;
-        while ((m = re.exec(code)) !== null) {
-            prompts.push(m[1] || '');
-        }
-        return prompts;
     }
 
     // ── Main compile handler ──────────────────────────────────────
@@ -202,8 +253,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     saveBtn.addEventListener('click', () => {
-        const stdout = outputEl.textContent;
-        const stderr = errorEl.textContent;
+        const stdout  = outputEl.textContent;
+        const stderr  = errorEl.textContent;
         const content = [stdout, stderr].filter(Boolean).join('\n\n--- stderr ---\n\n');
         if (!content) return;
         const blob = new Blob([content], { type: 'text/plain' });
