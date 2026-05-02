@@ -1,30 +1,16 @@
 document.addEventListener('DOMContentLoaded', function () {
 
-    // ── Pyodide setup ─────────────────────────────────────────────
-    // Python runs entirely in the browser via WebAssembly — no external API needed.
-    let pyodide = null;
-
-    async function loadPyodideRuntime() {
-        runBtn.disabled = true;
-        runBtn.classList.add('running');
-        runBtn.innerHTML = '<span class="spinner"></span> Loading…';
-        setStatus('running', 'loading Python runtime…');
-        try {
-            pyodide = await loadPyodide({
-                indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.27.5/full/'
-            });
-            setStatus('idle', 'ready');
-        } catch (err) {
-            setStatus('error', 'failed to load runtime');
-            showOutput('', `Failed to load Python runtime: ${err.message}`);
-        } finally {
-            runBtn.disabled = false;
-            runBtn.classList.remove('running');
-            runBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run';
-        }
-    }
-
-    loadPyodideRuntime();
+    // ── DOM refs — defined first so every function below can safely use them ──
+    const runBtn      = document.getElementById('run-btn');
+    const clearBtn    = document.getElementById('clear-btn');
+    const copyBtn     = document.getElementById('copy-btn');
+    const saveBtn     = document.getElementById('save-btn');
+    const clearOutBtn = document.getElementById('clear-output-btn');
+    const outputEl    = document.getElementById('output');
+    const errorEl     = document.getElementById('error-output');
+    const placeholder = document.getElementById('placeholder');
+    const inputArea   = document.getElementById('input-prompt-area');
+    const statusLabel = document.getElementById('status-label');
 
     // ── Editor setup ──────────────────────────────────────────────
     const editor = CodeMirror.fromTextArea(document.getElementById('code'), {
@@ -43,18 +29,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     editor.setValue("# Press Ctrl+Enter or click Run\nprint('Hello, World!')");
-
-    // ── DOM refs ──────────────────────────────────────────────────
-    const runBtn      = document.getElementById('run-btn');
-    const clearBtn    = document.getElementById('clear-btn');
-    const copyBtn     = document.getElementById('copy-btn');
-    const saveBtn     = document.getElementById('save-btn');
-    const clearOutBtn = document.getElementById('clear-output-btn');
-    const outputEl    = document.getElementById('output');
-    const errorEl     = document.getElementById('error-output');
-    const placeholder = document.getElementById('placeholder');
-    const inputArea   = document.getElementById('input-prompt-area');
-    const statusLabel = document.getElementById('status-label');
 
     // ── Status helper ─────────────────────────────────────────────
     function setStatus(state, text) {
@@ -96,28 +70,42 @@ document.addEventListener('DOMContentLoaded', function () {
         setStatus('idle', 'ready');
     }
 
-    // ── Pyodide execution ─────────────────────────────────────────
-    // Redirects sys.stdout/stderr into JS strings, then restores them.
-    // Feeds stdin values via a custom Python input() override.
-    async function executeCode(code, stdinValues = []) {
-        if (!pyodide) {
-            showOutput('', 'Python runtime is still loading. Please wait a moment and try again.');
-            return;
-        }
+    // ── Pyodide runtime load ──────────────────────────────────────
+    // Called AFTER DOM refs and helpers are defined so runBtn/setStatus exist.
+    let pyodide = null;
 
+    async function loadPyodideRuntime() {
+        runBtn.disabled = true;
+        runBtn.classList.add('running');
+        runBtn.innerHTML = '<span class="spinner"></span> Loading…';
+        setStatus('running', 'loading Python runtime…');
+        try {
+            pyodide = await loadPyodide({
+                indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.27.5/full/'
+            });
+            setStatus('idle', 'ready');
+        } catch (err) {
+            setStatus('error', 'failed to load runtime');
+            showOutput('', `Failed to load Python runtime: ${err.message}`);
+        } finally {
+            runBtn.disabled = false;
+            runBtn.classList.remove('running');
+            runBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run';
+        }
+    }
+
+    loadPyodideRuntime(); // safe to call now — runBtn and setStatus are defined above
+
+    // ── Pyodide execution ─────────────────────────────────────────
+    async function executeCode(code, stdinValues = []) {
         setStatus('running', 'running…');
         runBtn.classList.add('running');
 
         try {
-            let inputIndex = 0;
-
-            // Override Python's input() to pull from our stdinValues array
             pyodide.globals.set('_js_stdin_values', pyodide.toPy(stdinValues));
-            pyodide.globals.set('_js_stdin_index', 0);
 
             const setupCode = `
-import sys
-import io
+import sys, io, builtins
 
 _captured_stdout = io.StringIO()
 _captured_stderr = io.StringIO()
@@ -135,7 +123,6 @@ def _custom_input(prompt=''):
         return val
     return ''
 
-import builtins
 builtins.input = _custom_input
 `;
             await pyodide.runPythonAsync(setupCode);
@@ -148,15 +135,12 @@ builtins.input = _custom_input
             setStatus(stderr ? 'error' : 'success', stderr ? 'error' : 'done');
 
         } catch (err) {
-            // Pyodide surfaces Python tracebacks as JS errors
-            const traceback = err.message || String(err);
-            showOutput('', traceback);
+            showOutput('', err.message || String(err));
             setStatus('error', 'error');
         } finally {
-            // Always restore real stdout/stderr
             try {
                 await pyodide.runPythonAsync(`
-import sys, io, builtins
+import sys, builtins
 sys.stdout = sys.__stdout__
 sys.stderr = sys.__stderr__
 builtins.input = input
@@ -219,8 +203,7 @@ builtins.input = input
         if (fields[0]) fields[0].focus();
 
         submitBtn.addEventListener('click', () => {
-            const values = fields.map(f => f.value);
-            executeCode(editor.getValue(), values);
+            executeCode(editor.getValue(), fields.map(f => f.value));
         });
 
         if (fields.length > 0) {
