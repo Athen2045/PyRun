@@ -5,6 +5,9 @@ document.addEventListener('DOMContentLoaded', function () {
     let pyodide = null;
 
     async function loadPyodideRuntime() {
+        runBtn.disabled = true;
+        runBtn.classList.add('running');
+        runBtn.innerHTML = '<span class="spinner"></span> Loading…';
         setStatus('running', 'loading Python runtime…');
         try {
             pyodide = await loadPyodide({
@@ -14,6 +17,10 @@ document.addEventListener('DOMContentLoaded', function () {
         } catch (err) {
             setStatus('error', 'failed to load runtime');
             showOutput('', `Failed to load Python runtime: ${err.message}`);
+        } finally {
+            runBtn.disabled = false;
+            runBtn.classList.remove('running');
+            runBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run';
         }
     }
 
